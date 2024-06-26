@@ -1,7 +1,7 @@
 // src/hooks/useLocalStorage.js
 import { useState } from 'react';
 
-const useLocalStorage = (key:string, initialValue:any) => {
+const useLocalStorage = (key:string, initialValue:[]) => {
     const [storedValue, setStoredValue] = useState(() => {
         try {
             const item = window.localStorage.getItem(key);
