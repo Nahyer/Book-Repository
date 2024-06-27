@@ -1,24 +1,29 @@
 import { useRef, useState,useReducer, useEffect, useCallback} from "react";
-import useLocalStorage from "../hooks/useLocalStorage";
+// import useLocalStorage from "../hooks/useLocalStorage";
 import Pagination from "./Pagination";
+import axios from "axios";
+
 
 export interface Book {
-    id: number;
+	id?: number;
 	title: string;
 	author: string;
 	year: number;
 	pages: number;
-	read: boolean;
+
 }
 
 interface TEditBook{
 	edited: boolean;
-	id: number;
+	id: number|null;
 }
 
 const FormInput = () => {
-    const reducer = (state: Book[], action: any) => {
+    const reducer = (state: Book[], action: any): any=> {
         switch (action.type) {
+			case 'GET_BOOKS':
+				return action.payload;
+
             case 'ADD_BOOK':
                     return [...state, action.payload];
         
@@ -34,24 +39,77 @@ const FormInput = () => {
                 return state;
         }
     };
-	const addBook = (book: Book) => {	
-        dispatch({ type: 'ADD_BOOK', payload: book });
-    }
-    const removeBook = (id:number) => {
-        dispatch({ type: 'REMOVE_BOOK', payload: id });
-    }
-    // const updateBook = (book: Book) => {
-    //     dispatch({ type: 'UPDATE_BOOK', payload: book });
-    // }
+	
 
-	const [bookForm, setBookForm] = useState({ id: 0, title: '', author: '', year: 0, pages: 0, read: false });
-	const [localBooks,setStoredBooks] = useLocalStorage('books', []);
-    const [books, dispatch] = useReducer(reducer, localBooks);
+		
+    const [books, dispatch] = useReducer(reducer,[]);
+	// const [localBooks,setStoredBooks] = useLocalStorage('books', []);
+
 	useEffect(() => {
-        setStoredBooks(books);
-    }, [books]);
+		getDB()
+	},[])
 
+	const getDB = async () => {
+		try {
+			const res = await axios.get('http://localhost:8000/api/books');
+			if (!res.data) {
+				throw new Error('Failed to fetch data');
+			}
+			dispatch({ type: 'GET_BOOKS', payload: res.data });
+			console.log(res.data);
+		} catch (error:any) {
+			console.log(error.message);
+		}
+	}
 
+	const createBook = async (book: Book) => {
+		try {
+			const res = await axios.post('http://localhost:8000/api/books/create', book, {
+				headers: {
+				  'Content-Type': 'application/json'
+				}
+			  });
+			if (!res.data) {
+				throw new Error('Failed to create book');
+			}
+			dispatch({ type: 'ADD_BOOK', payload: book });
+			console.log(res.data);
+		} catch (error:any) {
+			console.log(error.response.data);
+		}
+	}
+
+	const deleteBook = async (id: number) => {
+		try {
+			const res = await axios.delete(`http://localhost:8000/api/books/delete/${id}`);
+			if (!res.data) {
+				throw new Error('Failed to delete book');
+			}
+			dispatch({ type: 'REMOVE_BOOK', payload: id });
+			console.log(res.data);
+		} catch (error:any) {
+			console.log(error.response.data);
+		}
+	}
+
+	// const updateBook = async (book: Book) => {
+	// 	try {
+	// 		const res = await axios.put(`http://localhost:8000/api/books/update/${book.id}`, book, {
+	// 			headers: {
+	// 			  'Content-Type': 'application/json'
+	// 			}
+	// 		  });
+	// 		if (!res.data) {
+	// 			throw new Error('Failed to update book');
+	// 		}
+	// 		dispatch({ type: 'UPDATE_BOOK', payload: book });
+	// 		console.log(res.data);
+	// 	} catch (error:any) {
+	// 		console.log(error.response.data);
+	// 	}
+	// }
+
+	
 	const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -62,16 +120,9 @@ const FormInput = () => {
 	 
 	useEffect(() => {
         setFilteredBooks(
-            books.filter(book => book.title.toLowerCase().includes(searchTerm.toLowerCase()))
+            books.filter((book:any)=> book.title.toLowerCase().includes(searchTerm.toLowerCase()))
         );
     }, [searchTerm, books]) 
-
-    // const [isEditing, setIsEditing] = useState(false);
-	// const startEdit = (book: Book) => {
-	// 	setBookForm(book);
-	// 	setIsEditing(true);
-	//   };
-	
 
 	const indexOfLastBook = currentPage * booksPerPage;
     const indexOfFirstBook = indexOfLastBook - booksPerPage;
@@ -87,36 +138,42 @@ const FormInput = () => {
 	const pagesRef = useRef<HTMLInputElement>(null);
 	const readRef = useRef<HTMLInputElement>(null);
 
+	const [bookForm, setBookForm] = useState<Book>({}as Book);
+
+
 	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const { name, value, checked, type } = e.target;
-		setBookForm((prev) => ({
-		  ...prev,
-		  [name]: type === 'checkbox' ? checked : value
-		}));
-		console.log(e.target);
+		const fdata: Book = {
+			...bookForm,
+			[e.target.name]: e.target.value
+		};
+		editBook.id ?  fdata.id = editBook.id: fdata.id = 0; 
+		setBookForm(fdata);
+		// handleEdit(bookForm);
 	};
+	useEffect(() => {
+		console.log(bookForm);
+	}, [bookForm]);
+
+	// const handleEdit = (book: Book) => {
+		
+	// 	dispatch({ type: 'UPDATE_BOOK', payload: book });
+	// 	setEditBook({edited:!editBook.edited,id:null});
+	// 	console.log(book);
+	// }
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (titleRef.current &&authorRef.current &&yearRef.current &&pagesRef.current &&readRef.current
+		if (titleRef.current &&authorRef.current &&yearRef.current &&pagesRef.current
 		) {
             const newBook = {
                 // id: editBook.edited ? Number(id.current.value) : books.length + 1,
-                id:  books.length + 1,
                 title: titleRef.current.value,
                 author: authorRef.current.value,
                 year: parseInt(yearRef.current.value),
-                pages: parseInt(pagesRef.current.value),
-                read: readRef.current.checked
+                pages: parseInt(pagesRef.current.value)
             };
+			createBook(newBook);
 
-			// const actionType = editBook.edited ? 'UPDATE_BOOK' : 'ADD_BOOK';
-			// dispatch({ type: actionType, payload: { ...bookForm, id: editBook.edited ? bookForm.id : books.length+1 } });
-			setBookForm({ id: 0, title: '', author: '', year: 0, pages: 0, read: false });
-			setEditBook({ edited: false, id: 0})
-			console.log(bookForm);
-			addBook(newBook);
-			console.log(newBook);
 			if (titleRef.current) titleRef.current.value = '';
 			if (authorRef.current) authorRef.current.value = '';
 			if (yearRef.current) yearRef.current.value = '';
@@ -126,39 +183,31 @@ const FormInput = () => {
 		}
 	};
 
-	const handleSuubmit = () => {
-		console.log('submitted');
-	}
 
 	return (
 		<>
 			<div>
 				<h2>BOOKREPO .inc</h2>
 				<button onClick={()=> setFormDisplay('block')}>AddBook</button>
-				<form style={{display: formDisplay}}>
+				<form style={{display: formDisplay}} onSubmit={handleSubmit}>
 					<div>
-						<label htmlFor='title'>Title:</label>
+						<label htmlFor='title'>Title: </label>
 						<input type='text' id='title' name='title' ref={titleRef} />
 					</div>
 					<div>
-						<label htmlFor='author'>Author:</label>
+						<label htmlFor='author'>Author: </label>
 						<input type='text' id='author' name='author' ref={authorRef} />
 					</div>
 					<div>
-						<label htmlFor='year'>Publication Year:</label>
+						<label htmlFor='year'>Publication Year: </label>
 						<input type='number' id='year' name='year' ref={yearRef} />
 					</div>
 					<div>
-						<label htmlFor='pages'>Pages:</label>
+						<label htmlFor='pages'>Pages: </label>
 						<input type='number' id='pages' name='pages' ref={pagesRef}  />
 					</div>
-					<div>
-						<label htmlFor='read'>Read:</label>
-						<input type='checkbox' id='read' name='read' ref={readRef} />
-					</div>
-					<button onClick={handleSubmit} type='submit'>
-						Submit
-					</button>
+					
+					<button type='submit'>Submit</button>
 				</form>
 			</div>
 			<input
@@ -172,61 +221,50 @@ const FormInput = () => {
 				<table>
 					<thead>
 					<tr>
-                    <th>Title</th>
-                    <th>Author</th>
-                    <th> Publication Year</th>
-					<th>Pages</th>
-					<th>Read</th>
-                    <th>Actions</th>
-				
-                </tr>
+						<th>Title</th>
+						<th>Author</th>
+						<th>Publication Year</th>
+						<th>Pages</th>
+						<th>Actions</th>
+					</tr>
 					</thead>
 					<tbody>
 					{currentBooks .map((book, index) => (
 						<tr key={index} >
 							
-								<td>{book.title}</td>
-								<td>Author: {book.author}</td>
-								<td>{book.year}</td>
-								<td> {book.pages}</td>
-								<td>{book.read ? "Yes" : "No"}</td>
+								<td>{editBook.edited && editBook.id === book.id  ?(
+									<input type='text' id='title' name='title' placeholder={book.title} onChange={handleChange}/>
+								):(book.title)
+									}</td>
 								<td>
-									<button onClick={()=>removeBook(book.id)}>✖️</button>
-									<button onClick={()=>setEditBook({edited:!editBook.edited,id:book.id})}>✏️</button>
-									{editBook.edited && editBook.id === book.id && (
-							<form>
-								<input type="hidden" name="bookId" id="id" value={book.id} onChange={handleChange}/>
-								<div>
-									<label htmlFor='title'>Title:</label>
-									<input type='text' id='title' name='title' value={book.title} onChange={handleChange}/>
-								</div>
-								<div>
-									<label htmlFor='author'>Author:</label>
-									<input type='text' id='author' name='author'  value={book.author}  onChange={handleChange}/>
-								</div>
-								<div>
-									<label htmlFor='year'>Publication Year:</label>
-									<input type='number' id='year' name='year'  onChange={handleChange}/>
-								</div>
-								<div>
-									<label htmlFor='pages'>Pages:</label>
-									<input type='number' id='pages' name='pages' value={book.pages}   onChange={handleChange}/>
-								</div>
-								<div>
-									<label htmlFor='read'>Read:</label>
-									<input type='checkbox' id='read' name='read' value={book.title}  onChange={handleChange}/>
-								</div>
-								<button onSubmit={handleSuubmit} type='submit'>
-									Edit
-								</button>
-							</form>
-						)}
+								{editBook.edited && editBook.id === book.id  ?(
+									<input type='text' id='author' name='author' placeholder={book.author} onChange={handleChange}/>
+								):(book.author)
+									}</td>
+								<td>{editBook.edited && editBook.id === book.id  ?(
+									<input type='number' id='year' name='year' placeholder={book.year.toString()} onChange={handleChange}/>
+								):(book.year)
+									}</td>
+								<td>{editBook.edited && editBook.id === book.id  ?(
+									<input type='number' id='pages' name='pages' placeholder={book.pages.toString()} onChange={handleChange}/>
+								):(book.pages)
+									}</td>
+								
+								<td>
+									<button onClick={()=>book.id && deleteBook(book.id)}>✖️</button>
+									<button onClick={()=>book.id && setEditBook({edited:!editBook.edited,id:book.id})}>✏️</button>
+									
 								</td>								
 						</tr>
 						
 					))}
 					</tbody>
 				</table>
+				{currentBooks.length === 0 && (
+			<div>
+			  No books found.
+			</div>
+		  )}
 			</div>
 			
             <Pagination booksPerPage={booksPerPage} totalBooks={filteredBooks.length} paginate={paginate} />
